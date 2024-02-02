@@ -1,8 +1,10 @@
+import json 
+
 from django.http import JsonResponse
 from django.templatetags.static import static
 
 
-from .models import Product
+from .models import Product, Order, OrderItem
 
 
 def banners_list_api(request):
@@ -58,5 +60,42 @@ def product_list_api(request):
 
 
 def register_order(request):
-    # TODO это лишь заглушка
-    return JsonResponse({})
+    try:
+        data = json.loads(request.body.decode())
+    except ValueError:
+        return JsonResponse({
+            'error': 'Invalid JSON data',
+        })
+
+    # Проверяем наличие поля "products" в данных заказа
+    if 'products' in data:
+        products_data = data['products']
+        # Создаем новый заказ
+        order = Order.objects.create(
+            firstname=data.get('firstname', ''),
+            lastname=data.get('lastname', ''),
+            phonenumber=data.get('phonenumber', ''),
+            address=data.get('address', ''),
+            status=data.get('status', 'new'),
+        )
+
+        # Добавляем продукты в заказ
+        for product_data in products_data:
+            product_id = product_data['product']
+            quantity = product_data['quantity']
+
+            # Создайте запись о продукте для заказа
+            OrderItem.objects.create(
+                order=order,
+                product_id=product_id,
+                quantity=quantity,
+            )
+
+        return JsonResponse({
+            'message': 'Order registered successfully',
+            'data': data,  # You can include additional data in the response
+        })
+    else:
+        return JsonResponse({
+            'error': 'No products in the order data',
+        })

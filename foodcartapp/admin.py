@@ -7,11 +7,23 @@ from .models import Product
 from .models import ProductCategory
 from .models import Restaurant
 from .models import RestaurantMenuItem
+from .models import Order
+from .models import OrderItem
 
 
 class RestaurantMenuItemInline(admin.TabularInline):
     model = RestaurantMenuItem
     extra = 0
+
+
+class OrderItemInline(admin.TabularInline):
+    model = OrderItem
+    extra = 0
+
+
+class OrderItemAdmin(admin.ModelAdmin):
+    list_display = ('order', 'product', 'quantity')
+    list_filter = ('order__status',)
 
 
 @admin.register(Restaurant)
@@ -104,3 +116,56 @@ class ProductAdmin(admin.ModelAdmin):
 @admin.register(ProductCategory)
 class ProductAdmin(admin.ModelAdmin):
     pass
+
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    list_display = [
+        'id',
+        'firstname',
+        'lastname',
+        'phonenumber',
+        'address',
+        'status',
+    ]
+    list_display_links = [
+        'id',
+    ]
+    list_filter = [
+        'status',
+    ]
+    search_fields = [
+        'id',
+        'firstname',
+        'lastname',
+        'phonenumber',
+        'adress',
+    ]
+    fieldsets = (
+        ('Общее', {
+            'fields': [
+                'id',
+                'firstname',
+                'lastname',
+                'phonenumber',
+                'address',
+                'status',
+            ]
+        }),
+    )
+    readonly_fields = [
+        'id',
+        'firstname',
+        'lastname',
+        'phonenumber',
+        'address',
+        'status',
+    ]
+    inlines = [OrderItemInline]
+
+    class Media:
+        css = {
+            "all": (
+                static("admin/foodcartapp.css")
+            )
+        }

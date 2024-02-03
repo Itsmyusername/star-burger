@@ -79,6 +79,18 @@ def product_list_api(request):
 @api_view(['POST'])
 def register_order(request):
     serializer = OrderSerializer(data=request.data)
+    products_data = request.data.get('products', [])
+    if not products_data:
+        return Response({'error': 'Empty product list is not allowed'}, status=status.HTTP_400_BAD_REQUEST)
+    if not isinstance(products_data, list):
+        return Response({'error': 'Invalid product data'}, status=status.HTTP_400_BAD_REQUEST)
+    for product_data in products_data:
+        product_id = product_data.get('product')
+        quantity = product_data.get('quantity')
+
+        if product_id is None or not isinstance(product_id, int) or quantity is None or not isinstance(quantity, int) or quantity <= 0:
+            return Response({'error': 'Invalid product data'}, status=status.HTTP_400_BAD_REQUEST)
+
     if serializer.is_valid():
         order = serializer.save()
         products_data = request.data.get('products', [])

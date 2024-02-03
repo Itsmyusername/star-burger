@@ -1,4 +1,5 @@
-import json 
+import json
+import phonenumbers
 
 from django.http import JsonResponse
 from django.templatetags.static import static
@@ -21,6 +22,16 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = '__all__'
+
+
+def validate_phone_number(phone_number):
+    try:
+        parsed_number = phonenumbers.parse(phone_number, None)
+        if not phonenumbers.is_valid_number(parsed_number):
+            return False
+        return True
+    except phonenumbers.phonenumberutil.NumberFormatException:
+        return False
 
 
 def banners_list_api(request):
@@ -78,6 +89,10 @@ def product_list_api(request):
 
 @api_view(['POST'])
 def register_order(request):
+    data = request.data  # Предполагается, что запрос отправляется в формате JSON
+    phone_number = data.get('phonenumber', '')
+    if not validate_phone_number(phone_number):
+        return Response({'error': 'Invalid phone number format'}, status=status.HTTP_400_BAD_REQUEST)
     serializer = OrderSerializer(data=request.data)
     products_data = request.data.get('products', [])
     if not products_data:
@@ -87,6 +102,8 @@ def register_order(request):
     for product_data in products_data:
         product_id = product_data.get('product')
         quantity = product_data.get('quantity')
+        if not Product.objects.filter(id=product_id).exists():
+            return Response({'error': f'Product with ID {product_id} does not exist'}, status=status.HTTP_400_BAD_REQUEST)
 
         if product_id is None or not isinstance(product_id, int) or quantity is None or not isinstance(quantity, int) or quantity <= 0:
             return Response({'error': 'Invalid product data'}, status=status.HTTP_400_BAD_REQUEST)

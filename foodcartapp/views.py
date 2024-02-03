@@ -2,9 +2,25 @@ import json
 
 from django.http import JsonResponse
 from django.templatetags.static import static
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status, serializers
 
 
 from .models import Product, Order, OrderItem
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderItem
+        fields = '__all__'
+
+class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Order
+        fields = '__all__'
 
 
 def banners_list_api(request):
@@ -29,6 +45,7 @@ def banners_list_api(request):
         'ensure_ascii': False,
         'indent': 4,
     })
+
 
 
 def product_list_api(request):
@@ -59,43 +76,19 @@ def product_list_api(request):
     })
 
 
+@api_view(['POST'])
 def register_order(request):
-    try:
-        data = json.loads(request.body.decode())
-    except ValueError:
-        return JsonResponse({
-            'error': 'Invalid JSON data',
-        })
+    serializer = OrderSerializer(data=request.data)
+    if serializer.is_valid():
+        order = serializer.save()
+        products_data = request.data.get('products', [])
 
-    # Проверяем наличие поля "products" в данных заказа
-    if 'products' in data:
-        products_data = data['products']
-        # Создаем новый заказ
-        order = Order.objects.create(
-            firstname=data.get('firstname', ''),
-            lastname=data.get('lastname', ''),
-            phonenumber=data.get('phonenumber', ''),
-            address=data.get('address', ''),
-            status=data.get('status', 'new'),
-        )
-
-        # Добавляем продукты в заказ
         for product_data in products_data:
-            product_id = product_data['product']
-            quantity = product_data['quantity']
+            product_id = product_data.get('product')
+            quantity = product_data.get('quantity')
 
-            # Создайте запись о продукте для заказа
-            OrderItem.objects.create(
-                order=order,
-                product_id=product_id,
-                quantity=quantity,
-            )
+            OrderItem.objects.create(order=order, product_id=product_id, quantity=quantity)
 
-        return JsonResponse({
-            'message': 'Order registered successfully',
-            'data': data,  # You can include additional data in the response
-        })
+        return Response({'message': 'Order registered successfully', 'data': serializer.data}, status=status.HTTP_201_CREATED)
     else:
-        return JsonResponse({
-            'error': 'No products in the order data',
-        })
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

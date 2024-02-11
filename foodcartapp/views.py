@@ -14,14 +14,28 @@ from .models import Product, Order, OrderItem
 class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
-        fields = '__all__'
+        fields = ['product', 'quantity']
 
 class OrderSerializer(serializers.ModelSerializer):
-    items = OrderItemSerializer(many=True, read_only=True)
+    products = OrderItemSerializer(many=True, write_only=True)
 
     class Meta:
         model = Order
-        fields = '__all__'
+        fields = ['id', 'firstname', 'lastname', 'phonenumber', 'address', 'products']
+
+    def validate_phonenumber(self, value):
+        try:
+            parsed_number = phonenumbers.parse(value, None)
+            if not phonenumbers.is_valid_number(parsed_number):
+                raise serializers.ValidationError("Введен некорректный номер телефона.")
+        except phonenumbers.NumberParseException:
+            raise serializers.ValidationError("Введен некорректный номер телефона.")
+        return value
+
+    def validate_products(self, value):
+        if not value:
+            raise serializers.ValidationError("Этот список не может быть пустым.")
+        return value
 
 
 def validate_phone_number(phone_number):
@@ -89,35 +103,21 @@ def product_list_api(request):
 
 @api_view(['POST'])
 def register_order(request):
-    data = request.data  # Предполагается, что запрос отправляется в формате JSON
-    phone_number = data.get('phonenumber', '')
-    if not validate_phone_number(phone_number):
-        return Response({'error': 'Invalid phone number format'}, status=status.HTTP_400_BAD_REQUEST)
     serializer = OrderSerializer(data=request.data)
-    products_data = request.data.get('products', [])
-    if not products_data:
-        return Response({'error': 'Empty product list is not allowed'}, status=status.HTTP_400_BAD_REQUEST)
-    if not isinstance(products_data, list):
-        return Response({'error': 'Invalid product data'}, status=status.HTTP_400_BAD_REQUEST)
-    for product_data in products_data:
-        product_id = product_data.get('product')
-        quantity = product_data.get('quantity')
-        if not Product.objects.filter(id=product_id).exists():
-            return Response({'error': f'Product with ID {product_id} does not exist'}, status=status.HTTP_400_BAD_REQUEST)
+    serializer.is_valid(raise_exception=True)
 
-        if product_id is None or not isinstance(product_id, int) or quantity is None or not isinstance(quantity, int) or quantity <= 0:
-            return Response({'error': 'Invalid product data'}, status=status.HTTP_400_BAD_REQUEST)
+    order = Order.objects.create(
+        firstname=serializer.validated_data['firstname'],
+        lastname=serializer.validated_data['lastname'],
+        phonenumber=serializer.validated_data['phonenumber'],
+        address=serializer.validated_data['address'],
+    )
 
-    if serializer.is_valid():
-        order = serializer.save()
-        products_data = request.data.get('products', [])
+    products_in_order = serializer.validated_data['products']
+    products = [OrderItem(order=order, **fields) for fields in products_in_order]
+    OrderItem.objects.bulk_create(products)
 
-        for product_data in products_data:
-            product_id = product_data.get('product')
-            quantity = product_data.get('quantity')
+    created_order = Order.objects.get(pk=order.pk)
+    serializer = OrderSerializer(created_order)
 
-            OrderItem.objects.create(order=order, product_id=product_id, quantity=quantity)
-
-        return Response({'message': 'Order registered successfully', 'data': serializer.data}, status=status.HTTP_201_CREATED)
-    else:
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    return Response(serializer.data, status=201)

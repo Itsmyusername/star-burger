@@ -122,6 +122,7 @@ class RestaurantMenuItem(models.Model):
     def __str__(self):
         return f"{self.restaurant.name} - {self.product.name}"
 
+
 class Order(models.Model):
     firstname = models.CharField(
         'имя',
@@ -165,14 +166,19 @@ class Order(models.Model):
     def __str__(self):
         return f"{self.firstname} {self.lastname} - {self.registrated_at}"
 
+
 class OrderItem(models.Model):
-    order = models.ForeignKey('Order', on_delete=models.CASCADE, verbose_name='товар')
-    product = models.ForeignKey('Product', on_delete=models.CASCADE, verbose_name='товар')
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, verbose_name='товар', related_name='products')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name='товар', related_name='orders')
     quantity = models.PositiveIntegerField('Количество', validators=[MinValueValidator(1)])
+    payment = models.DecimalField('стоимость', max_digits=8, decimal_places=2, null=True)
 
     class Meta:
         verbose_name = 'Позиция заказа'
         verbose_name_plural = 'Позиции заказа'
 
+    def get_products_cost(self):
+        return self.product.price * self.quantity
+
     def __str__(self):
-        return f'{self.order} {self.product}'
+        return self.product.name

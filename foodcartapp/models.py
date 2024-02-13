@@ -124,6 +124,12 @@ class RestaurantMenuItem(models.Model):
 
 
 class Order(models.Model):
+    STATUS_CHOICES = [
+        ('PR', 'Обработать'),
+        ('AS', 'Собрать'),
+        ('TR', 'Доставить'),
+        ('FN', 'Выполнен'),
+    ]
     firstname = models.CharField(
         'имя',
         max_length=50
@@ -145,9 +151,9 @@ class Order(models.Model):
         max_length=100
     )
     status = models.CharField(
-        'статус',
-        max_length=50,
-        default='new'
+        max_length=2,
+        choices=STATUS_CHOICES,
+        default='PR',
     )
     comment = models.TextField(
         'комментарий',

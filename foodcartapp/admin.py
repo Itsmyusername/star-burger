@@ -158,11 +158,6 @@ class OrderAdmin(admin.ModelAdmin):
     )
     readonly_fields = [
         'id',
- #       'firstname',
- #       'lastname',
- #       'phonenumber',
- #       'address',
-        'status',
     ]
     inlines = [OrderItemInline]
 

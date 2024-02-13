@@ -164,6 +164,13 @@ class Order(models.Model):
         'время регистрации',
         auto_now_add=True
     )
+    called_at = models.DateTimeField(
+        'Звонок совершён',
+        null=True, 
+        blank=True)
+    delivered_at = models.DateTimeField('Доставлен',
+                                         null=True,
+                                        blank=True)
 
     class Meta:
         verbose_name = 'заказ'

@@ -148,10 +148,13 @@ class OrderAdmin(admin.ModelAdmin):
         ('Общее', {
             'fields': [
                 'id',
+                'registrated_at',
                 'firstname',
                 'lastname',
                 'phonenumber',
                 'address',
+                'called_at',
+                'delivered_at',
                 'status',
                 'comment',
             ]
@@ -159,6 +162,7 @@ class OrderAdmin(admin.ModelAdmin):
     )
     readonly_fields = [
         'id',
+        'registrated_at',
     ]
     inlines = [OrderItemInline]
 

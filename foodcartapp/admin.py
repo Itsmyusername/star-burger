@@ -156,6 +156,7 @@ class OrderAdmin(admin.ModelAdmin):
                 'called_at',
                 'delivered_at',
                 'status',
+                'payment_method',
                 'comment',
             ]
         }),

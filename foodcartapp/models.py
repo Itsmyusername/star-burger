@@ -130,6 +130,10 @@ class Order(models.Model):
         ('TR', 'Доставить'),
         ('FN', 'Выполнен'),
     ]
+    PAYMENT_METHOD_CHOICES = [
+        ('EL', 'Электронно'),
+        ('CS', 'Наличностью'),
+    ]
     firstname = models.CharField(
         'имя',
         max_length=50
@@ -170,7 +174,13 @@ class Order(models.Model):
         blank=True)
     delivered_at = models.DateTimeField('Доставлен',
                                          null=True,
-                                        blank=True)
+                                        blank=True
+    )
+    payment_method = models.CharField(
+        max_length=2,
+        choices=PAYMENT_METHOD_CHOICES,
+        default='CS',
+    )
 
     class Meta:
         verbose_name = 'заказ'

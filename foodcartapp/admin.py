@@ -2,6 +2,9 @@ from django.contrib import admin
 from django.shortcuts import reverse
 from django.templatetags.static import static
 from django.utils.html import format_html
+from django.http import HttpResponseRedirect
+from django.utils.http import url_has_allowed_host_and_scheme
+from star_burger import settings
 
 from .models import Product
 from .models import ProductCategory
@@ -155,10 +158,10 @@ class OrderAdmin(admin.ModelAdmin):
     )
     readonly_fields = [
         'id',
-        'firstname',
-        'lastname',
-        'phonenumber',
-        'address',
+ #       'firstname',
+ #       'lastname',
+ #       'phonenumber',
+ #       'address',
         'status',
     ]
     inlines = [OrderItemInline]
@@ -169,3 +172,17 @@ class OrderAdmin(admin.ModelAdmin):
                 static("admin/foodcartapp.css")
             )
         }
+
+
+    def response_change(self, request, obj):
+        res = super(OrderAdmin, self).response_change(request, obj)
+        if "next" in request.GET:
+            redirect_to = request.GET['next']
+            url_is_safe = url_has_allowed_host_and_scheme(
+                url=redirect_to,
+                allowed_hosts=settings.ALLOWED_HOSTS,
+                require_https=request.is_secure(),
+                )
+            if url_is_safe:
+                return HttpResponseRedirect(request.GET['next'])
+        return res

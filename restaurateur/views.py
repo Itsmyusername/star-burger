@@ -103,6 +103,7 @@ def view_orders(request):
             'lastname': order.lastname,
             'phonenumber': order.phonenumber,
             'address': order.address,
+            'comment': order.comment,
             'payment': order.products.aggregate(Sum('payment'))['payment__sum']
         })
 

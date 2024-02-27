@@ -1,52 +1,11 @@
-import json
-import phonenumbers
-
-from django.db import transaction
 from django.http import JsonResponse
 from django.templatetags.static import static
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework import status, serializers
+from rest_framework.serializers import ModelSerializer
 
-
-from .models import Product, Order, OrderItem
-
-
-class OrderItemSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = OrderItem
-        fields = ['product', 'quantity', 'payment']
-
-class OrderSerializer(serializers.ModelSerializer):
-    products = OrderItemSerializer(many=True, write_only=True)
-
-    class Meta:
-        model = Order
-        fields = ['id', 'firstname', 'lastname', 'phonenumber', 'address', 'products']
-
-    def validate_phonenumber(self, value):
-        try:
-            parsed_number = phonenumbers.parse(value, None)
-            if not phonenumbers.is_valid_number(parsed_number):
-                raise serializers.ValidationError("Введен некорректный номер телефона.")
-        except phonenumbers.NumberParseException:
-            raise serializers.ValidationError("Введен некорректный номер телефона.")
-        return value
-
-    def validate_products(self, value):
-        if not value:
-            raise serializers.ValidationError("Этот список не может быть пустым.")
-        return value
-
-
-def validate_phone_number(phone_number):
-    try:
-        parsed_number = phonenumbers.parse(phone_number, None)
-        if not phonenumbers.is_valid_number(parsed_number):
-            return False
-        return True
-    except phonenumbers.phonenumberutil.NumberFormatException:
-        return False
+from foodcartapp.serializers import OrderSerializer
+from .models import OrderElements, Product
 
 
 def banners_list_api(request):
@@ -71,7 +30,6 @@ def banners_list_api(request):
         'ensure_ascii': False,
         'indent': 4,
     })
-
 
 
 def product_list_api(request):
@@ -102,26 +60,17 @@ def product_list_api(request):
     })
 
 
-@transaction.atomic
+class OrderElementsSerializer(ModelSerializer):
+    class Meta:
+        model = OrderElements
+        fields = ['product', 'product_number']
+
+
 @api_view(['POST'])
 def register_order(request):
     serializer = OrderSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
+    order = serializer.create(serializer.validated_data)
+    serializer = OrderSerializer(order)
 
-    order = Order.objects.create(
-        firstname=serializer.validated_data['firstname'],
-        lastname=serializer.validated_data['lastname'],
-        phonenumber=serializer.validated_data['phonenumber'],
-        address=serializer.validated_data['address'],
-    )
-
-    products_in_order = serializer.validated_data['products']
-    products = [OrderItem(order=order, **fields) for fields in products_in_order]
-    for product in products:
-        product.payment = product.get_products_cost()
-    OrderItem.objects.bulk_create(products)
-
-    created_order = Order.objects.get(pk=order.pk)
-    serializer = OrderSerializer(created_order)
-
-    return Response(serializer.data, status=201)
+    return Response(serializer.data)

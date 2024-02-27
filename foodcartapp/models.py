@@ -1,5 +1,8 @@
 from django.db import models
-from django.core.validators import MinValueValidator, RegexValidator
+from django.db.models import F, Sum
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.utils import timezone
+from phonenumber_field.modelfields import PhoneNumberField
 
 
 class Restaurant(models.Model):
@@ -34,6 +37,11 @@ class ProductQuerySet(models.QuerySet):
             .values_list('product')
         )
         return self.filter(pk__in=products)
+
+
+class OrderQuerySer(models.QuerySet):
+    def order_price(self):
+        return self.annotate(total_price=Sum(F('products__quantity') * F('products__product__price')))
 
 
 class ProductCategory(models.Model):
@@ -124,16 +132,22 @@ class RestaurantMenuItem(models.Model):
 
 
 class Order(models.Model):
-    STATUS_CHOICES = [
-        ('PR', 'Обработать'),
-        ('AS', 'Собрать'),
-        ('TR', 'Доставить'),
-        ('FN', 'Выполнен'),
-    ]
-    PAYMENT_METHOD_CHOICES = [
-        ('EL', 'Электронно'),
-        ('CS', 'Наличностью'),
-    ]
+    class ChoicesStatus(models.TextChoices):
+        COMPLETED = 'Завершен', 'Завершен'
+        ON_MY_WAY = 'В пути', 'В пути'
+        PROGRESS = 'Готовится', 'Готовится'
+        ACCEPTED = 'Принят', 'Принят'
+        RAW = 'Необработанный', 'Необработанный'
+
+    class ChoicesPayment(models.TextChoices):
+        ELECTRONIC_MONEY = 'Электронные', 'Электронные'
+        CASH = 'Наличные', 'Наличные'
+        NOT_SPECIFIED = 'Не указан', 'Не указан'
+
+    address = models.CharField(
+        'адрес',
+        max_length=100,
+    )
     firstname = models.CharField(
         'имя',
         max_length=50
@@ -142,66 +156,110 @@ class Order(models.Model):
         'фамилия',
         max_length=50
     )
-    phonenumber = models.CharField(
-        'номер телефона',
-        max_length=50,
-        validators=[RegexValidator(
-            regex=r'^\+?1?\d{9,15}$',
-            message="Номер телефона должен быть в формате: '+999999999'. Максимум 15 цифр."
-        )]
-    )
-    address = models.CharField(
-        'адрес',
-        max_length=100
+    phonenumber = PhoneNumberField(
+        'контактный телефон',
+        region='RU',
     )
     status = models.CharField(
-        max_length=2,
-        choices=STATUS_CHOICES,
-        default='PR',
+        'статус',
+        default=ChoicesStatus.RAW,
+        max_length=30,
+        choices=ChoicesStatus.choices,
+        db_index=True
     )
     comment = models.TextField(
         'комментарий',
-        max_length=200,
-        blank=True,
+        blank=True
     )
-    registrated_at = models.DateTimeField(
-        'время регистрации',
-        auto_now_add=True
+    created_at = models.DateTimeField(
+        'дата создания заказа',
+        default=timezone.now,
+        blank=True,
+        db_index=True
     )
     called_at = models.DateTimeField(
-        'Звонок совершён',
-        null=True, 
-        blank=True)
-    delivered_at = models.DateTimeField('Доставлен',
-                                         null=True,
-                                        blank=True
+        'дата звонка',
+        default=timezone.now,
+        null=True,
+        db_index=True
     )
-    payment_method = models.CharField(
-        max_length=2,
-        choices=PAYMENT_METHOD_CHOICES,
-        default='CS',
+    delivered_at = models.DateTimeField(
+        'дата доставки',
+        blank=True,
+        null=True,
+        db_index=True
     )
+    payment = models.CharField(
+        'способ оплаты',
+        default=ChoicesPayment.NOT_SPECIFIED,
+        max_length=30,
+        choices=ChoicesPayment.choices,
+        db_index=True
+    )
+    assigned_restaurant = models.ForeignKey(
+        Restaurant,
+        verbose_name='готовит ресторан',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
+    def process_order(self):
+        menu_items = self.products.all()
+        available_restaurants = []
+
+        for item in menu_items:
+            if item.product.menu_items.filter(availability=True).exists():
+                available_restaurants.append(item.product.menu_items.first().restaurant)
+
+        return list(set(available_restaurants))
+
+    def get_assigned_restaurant(self):
+        if self.assigned_restaurant:
+            return self.assigned_restaurant.name
+        else:
+            return None
+
+    objects = OrderQuerySer.as_manager()
 
     class Meta:
         verbose_name = 'заказ'
         verbose_name_plural = 'заказы'
 
     def __str__(self):
-        return f"{self.firstname} {self.lastname} - {self.registrated_at}"
+        return f"{self.lastname} {self.firstname}"
 
 
-class OrderItem(models.Model):
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, verbose_name='товар', related_name='products')
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name='товар', related_name='orders')
-    quantity = models.PositiveIntegerField('Количество', validators=[MinValueValidator(1)])
-    payment = models.DecimalField('стоимость', max_digits=8, decimal_places=2, null=True)
+class OrderElements(models.Model):
+    order = models.ForeignKey(
+        Order,
+        related_name='products',
+        verbose_name="заказ",
+        on_delete=models.CASCADE,
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='order_elements',
+        verbose_name='товар',
+    )
+    quantity = models.IntegerField(
+        'Количество продуктов в заказе',
+        validators=[MinValueValidator(0), MaxValueValidator(5)],
+        db_index=True)
+    price = models.DecimalField(
+        'цена',
+        max_digits=5,
+        decimal_places=2,
+        validators=[MinValueValidator(0)]
+    )
 
     class Meta:
-        verbose_name = 'Позиция заказа'
-        verbose_name_plural = 'Позиции заказа'
-
-    def get_products_cost(self):
-        return self.product.price * self.quantity
+        verbose_name = 'элемент заказа'
+        verbose_name_plural = 'элементы заказа'
+        unique_together = [
+            ['order', 'product']
+        ]
 
     def __str__(self):
-        return self.product.name
+        return f"{self.product.name} {self.order.lastname} {self.order.firstname} {self.order.address}"

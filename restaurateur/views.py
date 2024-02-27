@@ -1,4 +1,6 @@
+import requests
 from django import forms
+from django.conf import settings
 from django.shortcuts import redirect, render
 from django.views import View
 from django.urls import reverse_lazy
@@ -10,6 +12,7 @@ from django.db.models import Sum
 
 
 from foodcartapp.models import Product, Restaurant, Order
+from geocoder.models import GeocodeData
 
 
 class Login(forms.Form):
@@ -64,6 +67,25 @@ def is_manager(user):
     return user.is_staff  # FIXME replace with specific permission
 
 
+def fetch_coordinates(apikey, address):
+    base_url = "https://geocode-maps.yandex.ru/1.x"
+    response = requests.get(base_url, params={
+        "geocode": address,
+        "apikey": apikey,
+        "format": "json",
+    })
+    try:
+        response.raise_for_status()
+        found_places = response.json()['response']['GeoObjectCollection']['featureMember']
+    except requests.exceptions.RequestException:
+        return None
+
+    if found_places:
+        most_relevant = found_places[0]
+        lon, lat = most_relevant['GeoObject']['Point']['pos'].split(" ")
+        return lon, lat
+
+
 @user_passes_test(is_manager, login_url='restaurateur:login')
 def view_products(request):
     restaurants = list(Restaurant.objects.order_by('name'))
@@ -93,21 +115,43 @@ def view_restaurants(request):
 
 @user_passes_test(is_manager, login_url='restaurateur:login')
 def view_orders(request):
-    orders = Order.objects.exclude(status='FN').all()
-    order_items = []
-    for order in orders:
-        order_items.append({
-            'id': order.id,
-            'status': order.get_status_display(),
-            'firstname': order.firstname,
-            'lastname': order.lastname,
-            'phonenumber': order.phonenumber,
-            'address': order.address,
-            'payment_method': order.get_payment_method_display(),
-            'comment': order.comment,
-            'payment': order.products.aggregate(Sum('payment'))['payment__sum']
-        })
+    yandex_token = settings.YANDEX_TOKEN
+    geocoder = GeocodeData.objects.all()
+    order_items = Order.objects.exclude(status='Завершен').order_price()
+    for item in order_items:
+        item.available_restaurants = item.process_order()
+        item.restaurants_with_distance = []
 
+        geo_client = fetch_coordinates(yandex_token, item.address)
+        if geo_client is None:
+            continue
+
+        geo_client_db, _ = GeocodeData.objects.get_or_create(
+            address=item.address,
+            defaults={'lat': geo_client[1], 'lon': geo_client[0]}
+        )
+
+        for restaurant in item.available_restaurants:
+            geo_restaurant = geocoder.filter(address=restaurant.address).values('lat', 'lon').first()
+            if not geo_restaurant or not geo_client_db:
+                continue
+
+            geo_client_db, _ = GeocodeData.objects.get_or_create(
+                address=item.address,
+                defaults={'lat': geo_client[1], 'lon': geo_client[0]}
+            )
+
+            restaurant_coordinates = (geo_restaurant['lat'], geo_restaurant['lon'])
+            client_coordinates = (geo_client_db.lat, geo_client_db.lon)
+
+            distance_km = round(distance.distance(client_coordinates, restaurant_coordinates).km, 3)
+
+            item.restaurants_with_distance.append({
+                'restaurant': restaurant,
+                'distance': distance_km
+            })
+
+        item.restaurants_with_distance.sort(key=lambda x: x['distance'])
     return render(request, template_name='order_items.html', context={
         'order_items': order_items
     })

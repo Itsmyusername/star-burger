@@ -11,7 +11,7 @@ from .models import ProductCategory
 from .models import Restaurant
 from .models import RestaurantMenuItem
 from .models import Order
-from .models import OrderItem
+from .models import OrderElements
 
 
 class RestaurantMenuItemInline(admin.TabularInline):
@@ -19,8 +19,8 @@ class RestaurantMenuItemInline(admin.TabularInline):
     extra = 0
 
 
-class OrderItemInline(admin.TabularInline):
-    model = OrderItem
+class OrderElementsInline(admin.TabularInline):
+    model = OrderElements
     extra = 0
 
 
@@ -124,66 +124,31 @@ class ProductAdmin(admin.ModelAdmin):
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
     list_display = [
-        'id',
         'firstname',
         'lastname',
-        'phonenumber',
         'address',
-        'status',
-    ]
-    list_display_links = [
-        'id',
-    ]
-    list_filter = [
-        'status',
-    ]
-    search_fields = [
-        'id',
-        'firstname',
-        'lastname',
         'phonenumber',
-        'adress',
+        'assigned_restaurant'
     ]
-    fieldsets = (
-        ('Общее', {
-            'fields': [
-                'id',
-                'registrated_at',
-                'firstname',
-                'lastname',
-                'phonenumber',
-                'address',
-                'called_at',
-                'delivered_at',
-                'status',
-                'payment_method',
-                'comment',
-            ]
-        }),
-    )
-    readonly_fields = [
-        'id',
-        'registrated_at',
+    list_editable = [
+        'assigned_restaurant',
     ]
-    inlines = [OrderItemInline]
+    inlines = [
+        OrderElementsInline
+    ]
 
-    class Media:
-        css = {
-            "all": (
-                static("admin/foodcartapp.css")
-            )
-        }
+    def save_model(self, request, obj, form, change):
+        if 'status' in form.changed_data:
+            obj.save()
+        elif obj.assigned_restaurant:
+            obj.status = 'Готовится'
+        else:
+            obj.status = 'Необработанный'
+            obj.save()
 
-
-    def response_change(self, request, obj):
-        res = super(OrderAdmin, self).response_change(request, obj)
+    def response_post_save_change(self, request, obj):
+        res = super().response_post_save_change(request, obj)
         if "next" in request.GET:
-            redirect_to = request.GET['next']
-            url_is_safe = url_has_allowed_host_and_scheme(
-                url=redirect_to,
-                allowed_hosts=settings.ALLOWED_HOSTS,
-                require_https=request.is_secure(),
-                )
-            if url_is_safe:
-                return HttpResponseRedirect(request.GET['next'])
-        return res
+            return HttpResponseRedirect(request.GET['next'])
+        else:
+            return res

@@ -9,11 +9,11 @@ class GeocodeData(models.Model):
     )
     lat = models.FloatField(
         'широта',
-        null=True
+        blank=True
     )
     lon = models.FloatField(
         'долгота',
-        null=True
+        blank=True
     )
     geocode_date = models.DateTimeField(
         'дата запроса к геокодеру',

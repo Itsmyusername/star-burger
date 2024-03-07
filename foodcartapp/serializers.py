@@ -36,4 +36,9 @@ class OrderSerializer(ModelSerializer):
         OrderElements.objects.bulk_create(elements)
 
         return order
-    
+
+
+class OrderElementsSerializer(ModelSerializer):
+    class Meta:
+        model = OrderElements
+        fields = ['product', 'product_number']

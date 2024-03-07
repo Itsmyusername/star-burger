@@ -60,12 +60,6 @@ def product_list_api(request):
     })
 
 
-class OrderElementsSerializer(ModelSerializer):
-    class Meta:
-        model = OrderElements
-        fields = ['product', 'product_number']
-
-
 @api_view(['POST'])
 def register_order(request):
     serializer = OrderSerializer(data=request.data)

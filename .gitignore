@@ -30,6 +30,7 @@ share/python-wheels/
 *.egg
 MANIFEST
 staticfiles/
+star_burger/s
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

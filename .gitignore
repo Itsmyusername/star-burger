@@ -31,7 +31,7 @@ share/python-wheels/
 MANIFEST
 staticfiles/
 star_burger/s
-restaurateur/
+
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

@@ -160,3 +160,25 @@ Parcel будет следить за файлами в каталоге `bundle
 Где используется репозиторий:
 
 - Второй и третий урок [учебного курса Django](https://dvmn.org/modules/django/)
+
+## Докерезированный деплой
+Соберите Docker-контейнеры:
+```bash
+docker compose up -d
+```
+Выполните миграции и соберите статику:
+```bash
+docker compose exec django python manage.py migrate
+docker compose exec django python manage.py collectstatic --no-input
+```
+Откройте проект в браузере: перейдите на http://localhost:8080 для локальной машины
+и на ваш домен (например, https://burger.ru/) в случае с сервером.
+Для остановки контейнеров используйте:
+```bash
+docker compose down
+```
+
+Запустите:
+```bash
+deploy_star-burger_dockerized.sh
+```
